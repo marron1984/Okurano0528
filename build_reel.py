@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-FONT = "/tmp/jpmincho.ttf"  # IPAMincho — elegant ryōtei feel
+FONT = "/tmp/jpserif.ttf"  # Noto Serif CJK JP Bold — refined Mincho
 W, H = 1080, 1920
 FPS = 30
 XFADE = 0.4
