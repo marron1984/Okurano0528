@@ -30,6 +30,9 @@ INFO_STRIP_H = 410  # bottom strip height for the rich info card
 NORMAL_STRIP_H = 220
 
 # (image filename, telop, clip_seconds)
+#   telop = str   → normal shot with top brand strip + bottom telop strip
+#   telop = None  → final info card (multi-line store info)
+#   telop = ""    → raw card (no overlays, no zoom; static QR-friendly display)
 SHOTS = [
     ("お部屋_玄_kuro_0001.jpg", "大切な席に、ふさわしい一室を。", 3.2),
     ("イメージ_内観0002.jpg",   "完全個室「玄 ‐ KURO ‐」",       3.2),
@@ -41,6 +44,7 @@ SHOTS = [
     ("イメージ_季節のあしらい0001.jpg", "玄関に、季節のあしらい",     3.2),
     ("イメージ_調理0043.jpg",   "職人の手仕事を、一品ずつ",       3.2),
     ("コース全体0022.jpg",      None,                              5.0),  # info card
+    ("大嵓埜QR文字入り.png",    "",                                4.5),  # QR closing card
 ]
 
 TOP_STRIP_H = 110
@@ -55,7 +59,40 @@ def esc(s: str) -> str:
     )
 
 
+def build_raw_card(idx: int, image: str, dur: float) -> Path:
+    """Static fit-to-frame card with blurred background. No overlays, no zoom.
+    Used for the QR closing card so the QR stays sharp and scannable."""
+    out = ROOT / f"_clip_{idx:02d}.mp4"
+    vf = (
+        f"[0:v]scale=2400:-2,setsar=1,split=2[bg][fg];"
+        f"[bg]scale={W}:{H}:force_original_aspect_ratio=increase,"
+        f"crop={W}:{H},boxblur=24:1,eq=brightness=-0.22:saturation=0.6[bgb];"
+        f"[fg]scale={W}:{H}:force_original_aspect_ratio=decrease[fgs];"
+        f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]"
+    )
+    cmd = [
+        "ffmpeg", "-y",
+        "-loop", "1", "-t", str(dur),
+        "-i", str(ROOT / image),
+        "-filter_complex", vf,
+        "-map", "[v]",
+        "-r", str(FPS),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-preset", "medium", "-crf", "20",
+        "-movflags", "+faststart",
+        str(out),
+    ]
+    print(f"→ clip {idx:02d} ({dur}s) [raw card]", image)
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stderr[-3000:])
+        raise SystemExit(f"ffmpeg failed for clip {idx}")
+    return out
+
+
 def build_clip(idx: int, image: str, telop: str | None, dur: float) -> Path:
+    if telop == "":
+        return build_raw_card(idx, image, dur)
     out = ROOT / f"_clip_{idx:02d}.mp4"
     frames = int(dur * FPS)
     zoom_expr = f"min(1.0+0.0006*in\\,1.06)"
